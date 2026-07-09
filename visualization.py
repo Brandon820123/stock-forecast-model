@@ -15,14 +15,17 @@ def _ensure_output_dir(output_dir=OUTPUT_DIR):
     return output_dir
 
 
-def plot_price_prediction(actual, predicted, output_dir=OUTPUT_DIR, filename="price_prediction.png"):
+def plot_price_prediction(price_results, output_dir=OUTPUT_DIR, filename="price_prediction.png"):
     output_dir = _ensure_output_dir(output_dir)
     path = output_dir / filename
 
     plt.figure(figsize=(12, 6))
+    actual = price_results[0]["y_true"]
     plt.plot(actual.index, actual.values, label="Actual Close", linewidth=2)
-    plt.plot(predicted.index, predicted.values, label="Predicted Close", linewidth=2)
-    plt.title("Actual Close vs Predicted Close")
+    for result in price_results:
+        predicted = result["y_pred"]
+        plt.plot(predicted.index, predicted.values, label=result["name"], linewidth=1.6)
+    plt.title("Actual Close vs Price Forecast Models")
     plt.xlabel("Date")
     plt.ylabel("Close Price")
     plt.legend()
@@ -72,22 +75,55 @@ def plot_model_comparison(price_metrics, classification_metrics, output_dir=OUTP
     output_dir = _ensure_output_dir(output_dir)
     path = output_dir / filename
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10))
 
     price_df = pd.DataFrame(price_metrics).set_index("Model")
-    price_df[["MAE", "RMSE"]].plot(kind="bar", ax=axes[0])
-    axes[0].set_title("Price Prediction Error")
+    price_df[["MAE", "RMSE", "MAPE"]].plot(kind="bar", ax=axes[0])
+    axes[0].set_title("Price Prediction Metrics")
     axes[0].set_ylabel("Error")
-    axes[0].tick_params(axis="x", rotation=20)
+    axes[0].set_xlabel("Model")
+    axes[0].tick_params(axis="x", rotation=15)
+    axes[0].legend(title="Metric")
 
     class_df = pd.DataFrame(classification_metrics).set_index("Model")
     class_df[["Accuracy", "F1-score"]].plot(kind="bar", ax=axes[1], color=["#457b9d", "#e76f51"])
     axes[1].set_title("Direction Classification Performance")
+    axes[1].set_ylabel("Score")
+    axes[1].set_xlabel("Model")
     axes[1].set_ylim(0, 1)
-    axes[1].tick_params(axis="x", rotation=20)
+    axes[1].tick_params(axis="x", rotation=15)
+    axes[1].legend(title="Metric")
 
     plt.tight_layout()
     plt.savefig(path, dpi=150)
     plt.close()
     return path
 
+
+def plot_prediction_distribution(classification_results, output_dir=OUTPUT_DIR, filename="prediction_distribution.png"):
+    output_dir = _ensure_output_dir(output_dir)
+    path = output_dir / filename
+
+    rows = []
+    for result in classification_results:
+        metrics = result["metrics"]
+        rows.append(
+            {
+                "Model": result["name"],
+                "Predicted Up": metrics["predicted_up_count"],
+                "Predicted Down": metrics["predicted_down_count"],
+            }
+        )
+    dist_df = pd.DataFrame(rows).set_index("Model")
+
+    plt.figure(figsize=(10, 6))
+    dist_df.plot(kind="bar", color=["#2a9d8f", "#e76f51"])
+    plt.title("Prediction Distribution: Up vs Down")
+    plt.xlabel("Model")
+    plt.ylabel("Prediction Count")
+    plt.xticks(rotation=15)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path, dpi=150)
+    plt.close()
+    return path

@@ -39,11 +39,36 @@ def evaluate_price_predictions(y_true, y_pred):
 
 
 def evaluate_classification(y_true, y_pred):
+    y_pred = np.asarray(y_pred)
     return {
         "Accuracy": float(accuracy_score(y_true, y_pred)),
         "Precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "Recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "F1-score": float(f1_score(y_true, y_pred, zero_division=0)),
         "Confusion Matrix": confusion_matrix(y_true, y_pred),
+        "predicted_up_count": int(np.sum(y_pred == 1)),
+        "predicted_down_count": int(np.sum(y_pred == 0)),
     }
 
+
+def baseline_improvement(model_value, baseline_value, higher_is_better=False):
+    """Return percentage improvement of model over baseline."""
+    if baseline_value == 0:
+        return float("nan")
+    if higher_is_better:
+        return float((model_value - baseline_value) / abs(baseline_value) * 100)
+    return float((baseline_value - model_value) / abs(baseline_value) * 100)
+
+
+def comparison_message(model_name, baseline_name, improvement_pct):
+    if np.isnan(improvement_pct):
+        return f"{model_name}: cannot compare against {baseline_name} because baseline metric is zero."
+
+    if improvement_pct > 0:
+        message = f"{model_name} outperformed {baseline_name} by {improvement_pct:.2f}%."
+    else:
+        message = f"{model_name} did not outperform {baseline_name}."
+
+    if 0 < improvement_pct < 2:
+        message += " Improvement is small and may not be meaningful."
+    return message

@@ -1,12 +1,10 @@
 """Download, cache, and fallback data loading utilities."""
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from config import DATA_CACHE_DIR
+from config import DATA_CACHE_DIR, USE_CACHE, USE_SAMPLE_DATA_IF_DOWNLOAD_FAILS
 
 
 def _cache_path(ticker, start_date, end_date):
@@ -53,15 +51,16 @@ def load_stock_data(ticker, start_date, end_date):
 
     Returns:
         tuple[pd.DataFrame, str]: DataFrame and one of
-        "cache data", "yfinance real data", or "sample data".
+        "cached market data", "real yfinance market data", or
+        "sample random-walk data".
     """
     DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_file = _cache_path(ticker, start_date, end_date)
 
-    if cache_file.exists():
+    if USE_CACHE and cache_file.exists():
         df = pd.read_csv(cache_file, parse_dates=["Date"], index_col="Date")
-        print(f"[DATA] Current data source: cache data ({cache_file})")
-        return df.sort_index(), "cache data"
+        print(f"[DATA] Using cached market data: {cache_file}")
+        return df.sort_index(), "cached market data"
 
     try:
         df = yf.download(
@@ -82,13 +81,27 @@ def load_stock_data(ticker, start_date, end_date):
             raise ValueError(f"yfinance data missing columns: {missing}")
 
         df = df.dropna(subset=["Close"]).sort_index()
-        df.to_csv(cache_file)
-        print(f"[DATA] Current data source: yfinance real data (cached to {cache_file})")
-        return df, "yfinance real data"
+        if USE_CACHE:
+            df.to_csv(cache_file)
+            print(f"[DATA] Using real yfinance market data; cached to: {cache_file}")
+        else:
+            print("[DATA] Using real yfinance market data")
+        return df, "real yfinance market data"
     except Exception as exc:
         print(f"[DATA] yfinance download failed: {exc}")
-        print("[DATA] Current data source: sample data")
-        print("[DATA] WARNING: sample data is only for testing code flow, not real investment analysis.")
-        df = _generate_sample_data(start_date, end_date)
-        return df, "sample data"
 
+        if USE_CACHE and cache_file.exists():
+            df = pd.read_csv(cache_file, parse_dates=["Date"], index_col="Date")
+            print(f"[DATA] Using cached market data after yfinance failure: {cache_file}")
+            return df.sort_index(), "cached market data"
+
+        if not USE_SAMPLE_DATA_IF_DOWNLOAD_FAILS:
+            raise RuntimeError("No cache is available and sample fallback is disabled.") from exc
+
+        print("[DATA] Using sample random-walk data")
+        print(
+            "[DATA] WARNING: sample data was used. Results are only for testing workflow, "
+            "not real investment analysis."
+        )
+        df = _generate_sample_data(start_date, end_date)
+        return df, "sample random-walk data"
